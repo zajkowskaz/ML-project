@@ -1,0 +1,139 @@
+---
+title: "KNN Blood"
+author: "Dominika SkĂłrska & Zuzanna Zajkowska"
+date: "21 maja 2019"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=F}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Zastosowanie metody k-najbliższych sąsiadów do klasyfikacji dawców krwi. (R)
+
+Zastosowane metody klasyfikacji k-najbliższych sąsiadów do przewidzenia czy osoba odda krew w marcu czy nie, na podstawie pozostałych parametrów.
+
+Dane: </br>
+**Zmienne**:
+<ul>
+<li> Recency - czas od ostatniego oddania krwi (w miesiącach) </li> 
+<li> Frequency - częstość (ile razy ogólnie oddano krew)</li> 
+<li> Monetary - ile w sumie oddano krwi w cm3</li> 
+<li> Time - czas od pierwszego oddania krwi (w miesiącach)</li> 
+<li> Whether he/she donated blood in March - zmienna prognozowana: czy dawca odda 
+krew w Marcu</li> 
+</ul>
+
+Celem projektu jest zbudowanie zbioru treningowego i testowego, zbudowania modelu w celu zbadania trafności algorytmu KNN dla prognozowania tego czy dawca odda krew w danym miesiącu na bazie wymienionych wyżej zmiennych.
+
+## Metoda k-najbliższych sąsiadów 
+**Opis metody:** </br>
+Założenia: Dany jest zbiór uczący. Każdy przypadek w tym zbiorze zawiera wektor niezależnych zmiennych i wartość zmiennej zależnej Y. Dany jest przypadek C  zawierający wektor zmiennych niezależnych.   Dla tego przypadku chcemy prognozować wartość zmiennej zależnej Y
+
+**Algorytm: **
+<ul>
+<li> Porównanie niezależnych zmiennych przypadku C z wartościami tych zmiennych dla każdego przypadku ze zbioru treningowego. </li>
+<li> Wybór k (wcześniej określona liczba) najbliższych do C przypadków ze zbioru treningowego. </li>
+<li> Definicja prognozy </li>
+<li> Średnia wartość zmiennych zależnych dla wybranych obserwacji w przypadku problemu regresyjnego </li>
+<li> Przydział najczęściej pojawiającej się klasy spośród wybranych obserwacji w przypadku problemu klasyfikacji </li>
+</ul>
+
+Algorytm K - najbliższych sąsiadów jest szczególnie użyteczny, kiedy zależność pomiędzy zmiennymi zależnymi a niezależnymi  jest skomplikowana lub nietypowa (np. niemonotoniczna), tzn. trudna do modelowania w klasyczny sposób. W przypadku gdy ta zależność jest łatwa do interpretacji (np. liniowa), i zbiór nie zawiera wartości odstających, klasyczne metody (np. regresja liniowa) dają zazwyczaj lepsze rezultaty.
+
+```{r wczytanie bibbliotek i danych,echo = T, warning=F, message=F,include=F}
+library(caTools)
+library(class)
+library(ggplot2)
+library(readxl)
+library(ISLR)
+library(caret)
+dane_final <- read_excel("C:/Users/Zuzia/Documents/AGH/Uczenie maszynowe/dane.xlsx")
+names(dane_final) <- c("recency", "frequency", "monetary", "time", "donated")
+```
+
+## Podział na zbiór uczący i testowy
+
+Dane zostały podzielone w stosunku 7:3 na zbiór uczący i testowy. Algorytm dopasuje model do zbioru uczącego i na tej podstawie możliwe będzie wykonanie prognozy dla zbioru testowego i porównnie wyników z rzeczywistymi wartościami.
+
+```{r, echo = T, warning=F, message=F}
+set.seed(101)
+split <- sample.split(dane_final$donated, SplitRatio = 0.70)
+train <- subset(dane_final, split == TRUE)
+test <- subset(dane_final, split == FALSE)
+```
+
+## Wybór liczby "k"
+
+W celu wyboru optymalnej liczby "k" (najbliższyszch sąsiadóW) należy narysować odpowiedni wykres. Wykres przedstawia liczbę najbliższych sąsiadów (oś X) oraz dokładność (oś Y), obliczoną na podstawie sprawdzianu krzyżowego. Liczbie "k" odpowiada moment na wywkresie w którym wartość funkcji stabilizuje się. 
+
+Innym spoosbem na wyznaczenie liczby "k" jest obliczenie pierwiastka z liczby wszystkich obserwacji. 
+
+```{r, echo = T, warning=F, message=F }
+set.seed(400)
+ctrl <- trainControl(method = "repeatedcv", repeats = 3)
+knnFit <- train(donated ~ ., data = train, method = "knn", trControl = ctrl, preProcess = c("center","scale"),tuneLength = 10)
+plot(knnFit)
+
+sqrt(nrow(train))
+```
+
+Na podstawie wykresu liczbę "k" ustalono na 21, a na podstawie obliczenia pierwiastka "k" = 22. Zostaną porównane wyniki dla obydwóch wartości.
+
+## Budowa modelu, prognoza i określenie trafności
+
+```{r, echo = T, warning=F, message=F}
+set.seed(101)
+predicted_21 <- knn(train[1:4], test[1:4], train$donated, k = 21)
+set.seed(101)
+predicted_22 <- knn(train[1:4], test[1:4], train$donated, k = 22)
+
+
+```
+
+###Przedstawienie wyników: </br>
+Na podstawie parametrów: recency, fequency, monetary, time zbudowany został model przewidujący czy dany dawca odda krew w najbliższym miesiącu. Wynik przyjmuje postać liczby binarnej, dla której "1" oznacza oddanie krwi, a "0" nie.
+
+Wyniki zbadano dla 2 opcji: k=21 oraz k=22. </br>
+
+**k = 21** </br>
+
+Confusion matrix and rates:
+```{r, echo = T, warning=F, message=F}
+conf_matrix21 <- table(predicted_21, test$donated)
+msl_rate_21 <- mean(test$donated != predicted_21)
+accuracy_21 <- (conf_matrix21[1,1] + conf_matrix21[2,2])/nrow(test)
+conf_matrix21
+msl_rate_21
+accuracy_21
+
+```
+
+167 przypadków zostało dobrze sklasyfikowanych jako "0" oraz 5 dobrze sklasyfikowanych jako "1". 48 przypadków zostało błędnie sklasyfikowanych jako "1" i 4 przypadki błędnie sklasyfikowane jako "0". </br>
+
+Błędnie sklasyfikowano 23,2% przypadków ze zbioru testowego. </br>
+
+Poprawnie sklasyfikowano 76,8% przypadków ze zbioru testowego. </br> </br>
+
+**k = 22** </br>
+
+Confusion matrix and rates:
+```{r, echo = T, warning=F, message=F}
+conf_matrix22 <- table(predicted_22, test$donated)
+msl_rate_22 <- mean(test$donated != predicted_22)
+accuracy_22 <- (conf_matrix22[1,1] + conf_matrix22[2,2])/nrow(test)
+conf_matrix22
+msl_rate_22
+accuracy_22
+
+```
+
+164 przypadków zostało dobrze sklasyfikowanych jako "0" oraz 6 dobrze sklasyfikowanych jako "1". 47 przypadków zostało błędnie sklasyfikowanych jako "1" i 7 przypadki błędnie sklasyfikowane jako "0". </br>
+
+Błędnie sklasyfikowano 24,1% przypadków ze zbioru testowego. </br>
+
+Poprawnie sklasyfikowano 75,9% przypadków ze zbioru testowego. </br>
+
+**Minimalnie lepsze wyniki daje zastosowanie algorytmu dla k = 21, dla którego jesteśmy w stanie oszacować wyniki z prawdopodobieństwem na poziomie 76,8%.**
